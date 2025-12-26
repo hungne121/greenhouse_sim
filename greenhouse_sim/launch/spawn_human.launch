@@ -1,0 +1,17 @@
+<launch>
+  <arg name="x" default="0"/>
+  <arg name="y" default="0"/>
+  <arg name="z" default="0"/>
+
+  <!-- Spawn Human Actor -->
+  <node name="spawn_human" pkg="gazebo_ros" type="spawn_model" 
+        args="-sdf -file $(find greenhouse_sim)/models/human_actor/model.sdf -model human_actor -x $(arg x) -y $(arg y) -z $(arg z)" 
+        respawn="false" output="screen" />
+        
+  <!-- Note: User needs to run teleop separately -->
+  
+  <!-- FIX TF: Link human_odom to map so human appears in RViz correctly -->
+  <node pkg="tf" type="static_transform_publisher" name="map_to_human_odom" 
+        args="0 0 0 0 0 0 map human_odom 100" />
+        
+</launch>

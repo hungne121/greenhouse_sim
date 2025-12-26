@@ -1,0 +1,108 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <world name="greenhouse_world">
+    
+    <include>
+      <uri>model://sun</uri>
+    </include>
+
+    <scene>
+      <sky>
+        <clouds>
+          <speed>12</speed>
+        </clouds>
+      </sky>
+      <ambient>0.6 0.6 0.6 1</ambient>
+      <background>0.7 0.7 0.7 1</background>
+      <shadows>true</shadows>
+    </scene>
+
+    <model name="grass_ground">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size> </plane>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>100</mu>
+                <mu2>50</mu2>
+              </ode>
+            </friction>
+          </surface>
+        </collision>
+        
+        <visual name="visual">
+          <cast_shadows>false</cast_shadows>
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+          <material>
+            <script>
+              <uri>file://media/materials/scripts/gazebo.material</uri>
+              <name>Gazebo/Grass</name> 
+            </script>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <include>
+      <uri>model://greenhouse</uri> 
+      <pose>0 0 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>row_1_1</name>
+      <uri>model://plant_rose</uri>
+      <pose>-3 4 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>row_1_2</name>
+      <uri>model://plant_cactus</uri>
+      <pose>0 4 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>row_1_3</name>
+      <uri>model://plant_orchid</uri>
+      <pose>3 4 0 0 0 0</pose>
+    </include>
+
+    <include>
+      <name>row_2_1</name>
+      <uri>model://plant_chrysanthemum</uri>
+      <pose>-3 0 0 0 0 0</pose>
+    </include>
+    <include> <name>row_2_2</name>
+      <uri>model://plant_sunflower</uri>
+      <pose>0 0 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>row_2_3</name>
+      <uri>model://plant_tulip</uri>
+      <pose>3 0 0 0 0 0</pose>
+    </include>
+
+    <include>
+      <name>row_3_1</name>
+      <uri>model://plant_lily</uri>
+      <pose>-3 -4 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>row_3_2</name>
+      <uri>model://plant_hydrangea</uri>
+      <pose>0 -4 0 0 0 0</pose>
+    </include>
+    <include>
+      <name>row_3_3</name>
+      <uri>model://plant_succulent</uri>
+      <pose>3 -4 0 0 0 0</pose>
+    </include>
+  </world>
+</sdf>

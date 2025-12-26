@@ -1,0 +1,13 @@
+shutdown_costmaps: false
+
+# Giảm frequency để tránh missed rate warnings
+controller_frequency: 2.0       # Giảm từ 3Hz → 2Hz (ít áp lực hơn)
+planner_patience: 8.0           # Tăng patience
+controller_patience: 20.0       # Tăng patience
+conservative_reset_dist: 3.0
+planner_frequency: 1.0
+
+# Oscillation detection - tăng timeout để tránh false positive
+oscillation_timeout: 20.0      # Cho phép 20s dao động trước khi recovery
+oscillation_distance: 0.3      # Ngưỡng 30cm (tăng từ 20cm)
+

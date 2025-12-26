@@ -1,0 +1,13 @@
+<launch>
+
+  <!-- 1. Simple Leg Detector (Custom Python Node) -->
+  <node pkg="greenhouse_sim" type="simple_leg_detector.py" name="simple_leg_detector" output="screen">
+      <param name="fixed_frame" value="base_link" />
+  </node>
+  
+  <!-- 2. Converter (Optional now, usually for translating types if needed) -->
+  <!-- Note: simple_leg_detector publishes directly to /people (People) -->
+  <!-- We keep this if downstream needs specific adjustments, but normally not needed -->
+  <!-- <node pkg="greenhouse_sim" type="people_msg_converter.py" name="people_converter" output="screen"/> -->
+
+</launch>
