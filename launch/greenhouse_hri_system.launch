@@ -1,0 +1,14 @@
+<launch>
+  <!-- ========================================================== -->
+  <!-- GREENHOUSE HRI FULL SYSTEM LAUNCH                          -->
+  <!-- ========================================================== -->
+
+  <!-- 1. Core System (Simulation, Map, Navigation, Human, SMACH) -->
+  <!-- This launches everything defined in the original demo -->
+  <include file="$(find greenhouse_sim)/launch/greenhouse_demo.launch" />
+
+  <!-- 2. HRI Visual Interface (Tablet UI) -->
+  <!-- This opens the pop-up window for visual feedback -->
+  <node pkg="greenhouse_sim" type="tablet_ui.py" name="pepper_tablet_ui" output="screen" />
+
+</launch>

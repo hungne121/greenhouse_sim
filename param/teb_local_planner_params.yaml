@@ -1,0 +1,84 @@
+TebLocalPlannerROS:
+
+  odom_topic: odom
+  map_frame: map
+
+  # --- 1. CẤU HÌNH ROBOT ---
+  # Tốc độ conservative để tránh oscillation
+  max_vel_x: 0.3
+  max_vel_x_backwards: 0.15
+  max_vel_theta: 0.8        # Giảm tốc độ xoay
+  acc_lim_x: 0.4
+  acc_lim_theta: 1.2
+  
+  # Minimum velocities để tránh rung lắc khi gần goal (Hạ thấp để tinh chỉnh nhỏ)
+  min_vel_x: 0.02
+  min_vel_theta: 0.05
+
+  # --- 2. HÌNH DÁNG (FOOTPRINT) ---
+  # Pepper robot hình tròn/tam giác, khai báo circular an toàn nhất để xoay không bị vướng
+  footprint_model:
+    type: "circular"
+    radius: 0.25  # Bán kính 25cm (bao trùm chân Pepper)
+
+  # --- 3. CHIẾN THUẬT DI CHUYỂN (QUAN TRỌNG NHẤT) ---
+  min_turning_radius: 0.0        # Cho phép xoay tại chỗ
+  wheelbase: 0.0                 # Robot không phải xe hơi
+  cmd_angle_instead_rotvel: false
+
+  # --- 4. TRỌNG SỐ TỐI ƯU (CHÌA KHÓA ĐỂ SỬA LỖI) ---
+  
+  # Pepper là omni/holonomic (có thể xoay tại chỗ dễ dàng), giảm phạt non-holonomic
+  weight_kinematics_nh: 1.0   
+  
+  # CỰC QUAN TRỌNG: Giảm cái này xuống cực thấp để robot không cố lượn vòng cho "mượt"
+  weight_optimaltime: 0.05        
+  
+  # CỰC QUAN TRỌNG: Cho phép lùi thoải mái
+  # Nếu để cao (ví dụ 1000), robot thà đâm tường chứ quyết không lùi.
+  weight_kinematics_forward_drive: 1.0 
+  
+  # CỰC QUAN TRỌNG: Không phạt khi xoay
+  # Để số 0 để robot hiểu rằng "Xoay tại chỗ là miễn phí, cứ xoay đi!"
+  weight_kinematics_turning_radius: 0.0
+
+  # Phạt nặng nếu đến gần tường (giữ khoảng cách)
+  weight_obstacle: 100.0
+  weight_inflation: 1.0
+
+  # --- 5. TRÁNH VẬT CẢN (ĐIỀU CHỈNH ĐỂ CHUI LỌT KHE HẸP) ---
+  # Giảm khoảng cách an toàn tối thiểu để robot dám vào sát goal (nếu goal gần cây)
+  min_obstacle_dist: 0.1       # Giảm từ 0.25 -> 0.1
+  inflation_dist: 0.2          # Cảnh báo gần hơn
+  
+  # Giảm hình phạt vật cản để robot không bị đẩy ra khỏi goal
+  weight_obstacle: 40.0        # Giảm từ 100.0 -> 40.0
+  weight_inflation: 1.0
+  include_costmap_obstacles: true
+  costmap_obstacles_behind_robot_dist: 1.0
+
+  # Kiểm tra va chạm tương lai (Chống đâm tường khi cua)
+  feasibility_check_no_poses: 10
+  dt_ref: 0.2
+
+  # --- 6. VỀ ĐÍCH (GOAL TOLERANCES) ---
+  # XY Only Mode: yaw_goal_tolerance = 2*PI (ignore heading)
+  xy_goal_tolerance: 0.20         # 20cm
+  yaw_goal_tolerance: 6.28        # 2*PI (Ignore goal orientation)
+  free_goal_vel: false           # Bắt buộc dừng hẳn khi đến đích
+    
+  # --- 7. CẤU HÌNH TỐI ƯU HÓA ---
+  # TẮT Homotopy Class Planning: Đây là nguyên nhân chính gây ra việc robot
+  # phân vân giữa 2 đường (trái/phải) dẫn đến rung lắc (Oscillation).
+  enable_homotopy_class_planning: False
+  enable_multithreading: True
+  simple_exploration: False
+  
+  # Giảm iterations để tăng tốc độ tính toán
+  no_inner_iterations: 3         # Giảm từ 5 → 3
+  no_outer_iterations: 3         # Giảm từ 4 → 3
+  optimization_activate: True
+  optimization_verbose: False
+  penalty_epsilon: 0.1
+  legacy_obstacle_association: False
+  obstacle_association_force_inclusion_factor: 1.5

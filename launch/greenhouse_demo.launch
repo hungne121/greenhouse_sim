@@ -1,0 +1,22 @@
+<launch>
+    <!-- 1. The World & Robot & Navigation Stack -->
+    <include file="$(find greenhouse_sim)/launch/greenhouse_navigation.launch"/>
+
+    <!-- 2. Spawn the Human Actor (at x=2.0, y=0.0) -->
+    <include file="$(find greenhouse_sim)/launch/spawn_human.launch">
+        <!-- Safety Distance Calculation:
+             - Robot Stop Threshold: 0.8m (see greenhouse_smach.py)
+             - Interaction/Resume Zone: 0.8m to 2.0m
+             - Chosen Distance: 1.5m (Safe, Clear of Inflation, Ready to Interact) -->
+        <arg name="x" value="-5.0"/>
+        <arg name="y" value="1.0"/>
+        <arg name="z" value="0.0"/>
+    </include>
+
+    <!-- 3. Perception Pipeline (Hydrid System - Integrated in SMACH/PerceptionManager) -->
+    <!-- <include file="$(find greenhouse_sim)/launch/leg_tracking.launch"/> REMOVED -->
+
+    <!-- 4. The Brain: SMACH Controller -->
+    <!-- Runs in a separate terminal window typically, but here we launch as node -->
+    <node pkg="greenhouse_sim" type="greenhouse_smach.py" name="greenhouse_smach_controller" output="screen"/>
+</launch>

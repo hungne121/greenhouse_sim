@@ -1,0 +1,95 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <model name="greenhouse">
+    <static>true</static>
+    <pose>0 0 0 0 0 0</pose>
+
+    <link name="floor">
+      <visual name="floor_vis">
+        <pose>0 0 0.01 0 0 0</pose>
+        <geometry><box><size>15.2 16.2 0.02</size></box></geometry> 
+        <material><script><name>Gazebo/DarkGrey</name></script></material>
+      </visual>
+      <collision name="floor_col">
+        <pose>0 0 0.01 0 0 0</pose>
+        <geometry><box><size>15.2 16.2 0.02</size></box></geometry>
+      </collision>
+    </link>
+
+    <link name="white_pillars">
+      
+      <visual name="p_n1"><pose>-7.5 8 1.5 0 0 0</pose><geometry><box><size>0.2 0.2 3.0</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="p_n2"><pose>-4.5 8 1.5 0 0 0</pose><geometry><box><size>0.15 0.15 3.0</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="p_n3"><pose>-1.5 8 1.5 0 0 0</pose><geometry><box><size>0.15 0.15 3.0</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="p_n5"><pose>1.5 8 1.5 0 0 0</pose><geometry><box><size>0.15 0.15 3.0</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="p_n6"><pose>4.5 8 1.5 0 0 0</pose><geometry><box><size>0.15 0.15 3.0</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="p_n7"><pose>7.5 8 1.5 0 0 0</pose><geometry><box><size>0.2 0.2 3.0</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+
+      <visual name="p_s1"><pose>-7.5 -8 1.5 0 0 0</pose><geometry><box><size>0.2 0.2 3.0</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="p_s2"><pose>-4.5 -8 1.5 0 0 0</pose><geometry><box><size>0.15 0.15 3.0</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="p_s3"><pose>-1.5 -8 1.5 0 0 0</pose><geometry><box><size>0.15 0.15 3.0</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="p_s5"><pose>1.5 -8 1.5 0 0 0</pose><geometry><box><size>0.15 0.15 3.0</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="p_s6"><pose>4.5 -8 1.5 0 0 0</pose><geometry><box><size>0.15 0.15 3.0</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="p_s7"><pose>7.5 -8 1.5 0 0 0</pose><geometry><box><size>0.2 0.2 3.0</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+
+      <visual name="p_e1"><pose>7.5 4 1.5 0 0 0</pose><geometry><box><size>0.15 0.15 3.0</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="p_e3"><pose>7.5 -4 1.5 0 0 0</pose><geometry><box><size>0.15 0.15 3.0</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+
+      <visual name="p_w1"><pose>-7.5 4 1.5 0 0 0</pose><geometry><box><size>0.15 0.15 3.0</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="p_w2"><pose>-7.5 -4 1.5 0 0 0</pose><geometry><box><size>0.15 0.15 3.0</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+
+      <visual name="beam_n"><pose>0 8 3.0 0 0 0</pose><geometry><box><size>15.2 0.15 0.15</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="beam_s"><pose>0 -8 3.0 0 0 0</pose><geometry><box><size>15.2 0.15 0.15</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="beam_e"><pose>7.5 0 3.0 0 0 0</pose><geometry><box><size>0.15 16.2 0.15</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="beam_w"><pose>-7.5 0 3.0 0 0 0</pose><geometry><box><size>0.15 16.2 0.15</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+
+      <collision name="col_n"><pose>0 8 1.5 0 0 0</pose><geometry><box><size>15.0 0.2 3.0</size></box></geometry></collision>
+      <collision name="col_s"><pose>0 -8 1.5 0 0 0</pose><geometry><box><size>15.0 0.2 3.0</size></box></geometry></collision>
+      <collision name="col_e1"><pose>7.5 4 1.5 0 0 0</pose><geometry><box><size>0.2 8.0 3.0</size></box></geometry></collision>
+      <collision name="col_e2"><pose>7.5 -4 1.5 0 0 0</pose><geometry><box><size>0.2 8.0 3.0</size></box></geometry></collision>
+      <collision name="col_w1"><pose>-7.5 4 1.5 0 0 0</pose><geometry><box><size>0.2 8.0 3.0</size></box></geometry></collision>
+      <collision name="col_w2"><pose>-7.5 -4 1.5 0 0 0</pose><geometry><box><size>0.2 8.0 3.0</size></box></geometry></collision>
+    </link>
+
+    <link name="roof_frame">
+      <visual name="ridge_beam"><pose>0 0 6.0 0 0 0</pose><geometry><box><size>15.2 0.15 0.15</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      
+      <visual name="rafter_L1"><pose>-7.5 4 4.5 -0.32 0 0</pose><geometry><box><size>0.1 8.5 0.1</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="rafter_L2"><pose>-4.5 4 4.5 -0.32 0 0</pose><geometry><box><size>0.1 8.5 0.1</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="rafter_L3"><pose>-1.5 4 4.5 -0.32 0 0</pose><geometry><box><size>0.1 8.5 0.1</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="rafter_L5"><pose>1.5 4 4.5 -0.32 0 0</pose><geometry><box><size>0.1 8.5 0.1</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="rafter_L6"><pose>4.5 4 4.5 -0.32 0 0</pose><geometry><box><size>0.1 8.5 0.1</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="rafter_L7"><pose>7.5 4 4.5 -0.32 0 0</pose><geometry><box><size>0.1 8.5 0.1</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+
+      <visual name="rafter_R1"><pose>-7.5 -4 4.5 0.32 0 0</pose><geometry><box><size>0.1 8.5 0.1</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="rafter_R2"><pose>-4.5 -4 4.5 0.32 0 0</pose><geometry><box><size>0.1 8.5 0.1</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="rafter_R3"><pose>-1.5 -4 4.5 0.32 0 0</pose><geometry><box><size>0.1 8.5 0.1</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="rafter_R5"><pose>1.5 -4 4.5 0.32 0 0</pose><geometry><box><size>0.1 8.5 0.1</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="rafter_R6"><pose>4.5 -4 4.5 0.32 0 0</pose><geometry><box><size>0.1 8.5 0.1</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+      <visual name="rafter_R7"><pose>7.5 -4 4.5 0.32 0 0</pose><geometry><box><size>0.1 8.5 0.1</size></box></geometry><material><script><name>Gazebo/White</name></script></material></visual>
+    </link>
+
+    <link name="glass_shell">
+      <visual name="glass_n">
+        <pose>0 8 1.5 0 0 0</pose><geometry><box><size>15.0 0.05 2.8</size></box></geometry>
+        <material><script><name>Gazebo/GreyTransparent</name></script></material>
+      </visual>
+      <visual name="glass_s">
+        <pose>0 -8 1.5 0 0 0</pose><geometry><box><size>15.0 0.05 2.8</size></box></geometry>
+        <material><script><name>Gazebo/GreyTransparent</name></script></material>
+      </visual>
+
+      <visual name="roof_L">
+        <pose>0 4 4.5 -0.32 0 0</pose>
+        <geometry><box><size>15.2 8.5 0.02</size></box></geometry>
+        <material><script><name>Gazebo/GreyTransparent</name></script></material>
+      </visual>
+      <visual name="roof_R">
+        <pose>0 -4 4.5 0.32 0 0</pose>
+        <geometry><box><size>15.2 8.5 0.02</size></box></geometry>
+        <material><script><name>Gazebo/GreyTransparent</name></script></material>
+      </visual>
+    </link>
+
+  </model>
+</sdf>

@@ -1,0 +1,67 @@
+waypoints:
+  # --- PAIR 1 (x=-3) ---
+  wp_1: # Faces Rose (Row 1)
+    pose: 
+      position: {x: -3.0, y: 2.0, z: 0.0}
+      orientation: {x: 0.0, y: 0.0, z: 0.707, w: 0.707} # +90 deg (North)
+    plant_type: "hoa hồng"
+    plant_info: "Hoa hồng (Rose) nằm ở hàng ngoài cùng bên trái."
+
+  wp_2: # Faces Chrysanthemum (Row 2)
+    pose: 
+      position: {x: -3.0, y: 2.0, z: 0.0}
+      orientation: {x: 0.0, y: 0.0, z: -0.707, w: 0.707} # -90 deg (South)
+    plant_type: "cúc"
+    plant_info: "Hoa cúc (Chrysanthemum) nằm ở hàng giữa bên trái."
+
+  # --- PAIR 2 (x=0) ---
+  wp_3: # Faces Cactus (Row 1)
+    pose: 
+      position: {x: 0.0, y: 2.0, z: 0.0}
+      orientation: {x: 0.0, y: 0.0, z: 0.707, w: 0.707}
+    plant_type: "xương rồng"
+    plant_info: "Xương rồng (Cactus) nằm ở hàng ngoài cùng trính giữa."
+
+  wp_4: # Faces Sunflower (Row 2)
+    pose: 
+      position: {x: 0.0, y: 2.0, z: 0.0}
+      orientation: {x: 0.0, y: 0.0, z: -0.707, w: 0.707}
+    plant_type: "hướng dương"
+    plant_info: "Hoa hướng dương (Sunflower) nằm ở hàng giữa trính giữa."
+
+  # --- PAIR 3 (x=3) ---
+  wp_5: # Faces Orchid (Row 1)
+    pose: 
+      position: {x: 3.0, y: 2.0, z: 0.0}
+      orientation: {x: 0.0, y: 0.0, z: 0.707, w: 0.707}
+    plant_type: "lan"
+    plant_info: "Hoa lan (Orchid) nằm ở hàng ngoài cùng bên phải."
+
+  wp_6: # Faces Tulip (Row 2)
+    pose: 
+      position: {x: 3.0, y: 2.0, z: 0.0}
+      orientation: {x: 0.0, y: 0.0, z: -0.707, w: 0.707}
+    plant_type: "tulip"
+    plant_info: "Hoa Tulip nằm ở hàng giữa bên phải."
+
+  # --- ROW 3 (x=-3, 0, 3) Accessed from Aisle 2 (y=-2) ---
+  wp_7: # Faces Lily (Row 3, Left)
+    pose: 
+      position: {x: -3.0, y: -2.0, z: 0.0}
+      orientation: {x: 0.0, y: 0.0, z: -0.707, w: 0.707} # South
+    plant_type: "ly"
+    plant_info: "Hoa ly (Lily) nằm ở hàng trong cùng bên trái."
+
+  wp_8: # Faces Hydrangea (Row 3, Center)
+    pose: 
+      position: {x: 0.0, y: -2.0, z: 0.0}
+      orientation: {x: 0.0, y: 0.0, z: -0.707, w: 0.707}
+    plant_type: "cẩm tú cầu"
+    plant_info: "Hoa Cẩm Tú Cầu (Hydrangea) nằm ở hàng trong cùng trính giữa."
+
+  wp_9: # Faces Succulent (Row 3, Right)
+    pose: 
+      position: {x: 3.0, y: -2.0, z: 0.0}
+      orientation: {x: 0.0, y: 0.0, z: -0.707, w: 0.707}
+    plant_type: "sen đá"
+    plant_info: "Sen đá (Succulent) nằm ở hàng trong cùng bên phải."

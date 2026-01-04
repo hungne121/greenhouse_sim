@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<launch>
+    <arg name="use_sim_time" default="true"/>
+    <arg name="launch_control_trajectory_all" default="true"/>
+    <arg name="configuration_basename" default="greenhouse_lds_2d.lua"/>
+    
+    <include file="$(find greenhouse_sim)/launch/greenhouse_world.launch">
+        <arg name="use_sim_time" value="$(arg use_sim_time)"/>
+    </include>
+
+    <param name="robot_description" 
+         command="$(find xacro)/xacro --inorder '$(find greenhouse_sim)/urdf/pepper1.0_generated_urdf/pepper_robot.xacro'" />
+
+    <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher" />
+    
+
+    <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model"
+        args="-param robot_description -urdf -x -6.2537 -y 0.8854 -z 0.0 -Y -1.57 -model pepper_MP" />
+
+    <rosparam file="$(find greenhouse_sim)/param/pepper_gazebo_controller.yaml" command="load" />
+
+    <include file="$(find greenhouse_sim)/launch/pepper_control_trajectory.launch" unless="$(arg launch_control_trajectory_all)"/>
+    <include file="$(find greenhouse_sim)/launch/pepper_control_trajectory_all.launch" if="$(arg launch_control_trajectory_all)"/>
+
+</launch>
