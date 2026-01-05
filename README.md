@@ -14,3 +14,7 @@ sudo apt install ros-noetic-pepper-description
 ```bash
 roslaunch greenhouse_sim greenhouse_hri_system
 ```
+## Run human model
+```bash
+rosrun teleop_twist_keyboard teleop_twist_keyboard.py cmd_vel:=/human/cmd_vel
+```
