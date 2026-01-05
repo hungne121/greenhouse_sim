@@ -119,7 +119,7 @@ def train_and_save_model():
     # But we train with generic words to capture structure
     nav_slots = {
         **common_slots,
-        "noun_plant": ["cây", "hoa", "bụi cây", "chậu hoa", "cúc", "hồng", "lan", "sen đá", "ly"] 
+        "noun_plant": ["cây", "hoa", "bụi cây", "chậu hoa", "cúc", "hồng", "lan", "sen đá", "ly", "hoa lan"] 
     }
     add_list(generate_permutations(nav_templates, nav_slots), "navigation_request")
 

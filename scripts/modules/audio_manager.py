@@ -16,6 +16,7 @@ import threading
 from queue import Queue
 import webrtcvad
 import struct
+from std_msgs.msg import String
 
 # ALSA Error Suppression
 from ctypes import *
@@ -72,6 +73,9 @@ class AudioManager:
         self.listen_thread = None
         self.audio_queue = Queue()  # Thread-safe queue
         
+        # UI Publisher
+        self.dialogue_pub = rospy.Publisher('/pepper/ui/dialogue', String, queue_size=10)
+        
         rospy.loginfo("[AudioManager] Initialized with thread-safe locking.")
     
     def _load_model(self):
@@ -98,6 +102,7 @@ class AudioManager:
             blocking: If True, wait until speech finishes. If False, return immediately.
         """
         rospy.loginfo(f"🤖 [AudioManager] Speaking: {text}")
+        self.dialogue_pub.publish(f"Robot: {text}")
         
         def _speak_worker():
             with self.audio_lock:  # ACQUIRE LOCK - Mic is now CLOSED
@@ -156,6 +161,7 @@ class AudioManager:
                     audio = self.recognizer.listen(source, timeout=5, phrase_time_limit=5)
                     text = self.recognizer.recognize_google(audio, language="vi-VN")
                     rospy.loginfo(f"🗣️ Heard: {text}")
+                    self.dialogue_pub.publish(f"User: {text}")
                     return text.lower()
                     
             except sr.WaitTimeoutError:

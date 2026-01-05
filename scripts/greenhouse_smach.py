@@ -11,6 +11,7 @@ import smach_ros
 import threading
 import time
 import math
+from geometry_msgs.msg import Twist
 from actionlib_msgs.msg import GoalStatus
 from modules.audio_manager import AudioManager
 from modules.navigation_manager import NavigationManager
@@ -44,6 +45,10 @@ class IdleState(smach.State):
     def execute(self, userdata):
         rospy.loginfo("[IDLE] Waiting for command (or Front Intent)...")
         self.gesture.perform_gesture('reset_pose')
+        
+        # UI Update
+        self.display.update_status("Đang chờ lệnh... (Hãy nói 'Xin chào')")
+        self.display.update_options(["Bắt đầu Tour", "Tìm cây", "Trợ giúp"])
         self.display.show_text("Robot Pepper: Sẵn sàng phục vụ")
         
         # Check Handoff
@@ -88,6 +93,14 @@ class IdleState(smach.State):
             intent, conf = self.audio.predict_intent(text)
             rospy.loginfo(f"[IDLE] Detected: {intent} ({conf:.2f})")
             
+            # Confidence Threshold
+            if conf < 0.75:
+                # Fallback: specific check for keywords even if model is unsure?
+                # For now just reject
+                rospy.logwarn(f"[IDLE] Low confidence ({conf:.2f}). Rejecting.")
+                self.audio.speak("Xin lỗi, tôi nghe chưa rõ.")
+                continue
+
             if intent == 'quit_system':
                 self.audio.speak("Tạm biệt!")
                 return 'shutdown'
@@ -99,6 +112,7 @@ class IdleState(smach.State):
                 plant_name = None
                 for p in self.knowledge.get_all_plant_names():
                     if p in text: plant_name = p; break
+                
                 if plant_name:
                     userdata.target_plant = plant_name
                     self.audio.speak(f"Ok, đi đến {plant_name}.")
@@ -117,16 +131,31 @@ class IdleState(smach.State):
 
 class BaseNavigateState(smach.State):
     """Base class for Human-Aware Navigation"""
-    def __init__(self, nav, perception, audio, outcomes, input_keys, output_keys=[]):
+    def __init__(self, nav, perception, audio, display, outcomes, input_keys, output_keys=[]):
         smach.State.__init__(self, outcomes, input_keys, output_keys)
         self.nav = nav
         self.perception = perception
         self.audio = audio
+        self.display = display
         
+
+    current_rot_vel = 0.0
+    
+    def _cmd_vel_monitoring(self, msg):
+        try:
+            self.current_rot_vel = msg.angular.z
+        except:
+            pass
+
     def perform_leading(self, pose):
         """
         Execute navigation with Rear Sensor Fusion Logic
+        Distinguishes User-Lost Timeout for Straight vs Turning
         """
+        # Subscribe to monitor Twist
+        import geometry_msgs.msg
+        sub = rospy.Subscriber('/cmd_vel', geometry_msgs.msg.Twist, self._cmd_vel_monitoring)
+        
         self.nav.send_goal(pose, done_cb=self._done_cb)
         self.done = False
         self.nav_status = None
@@ -135,10 +164,12 @@ class BaseNavigateState(smach.State):
         rate = rospy.Rate(5)
         last_seen_time = rospy.Time.now()
         
+        # Timeouts specified by User (Reversed: Turn needs more patience)
+        TIMEOUT_STRAIGHT = 2.0
+        TIMEOUT_TURN = 5.0
+        
         while not self.done and not rospy.is_shutdown():
             # --- REAR SENSOR FUSION ---
-            # 1. Check Rear
-            # 1. Check Rear
             dist, angle, found = self.perception.get_rear_track()
             
             if found:
@@ -146,33 +177,33 @@ class BaseNavigateState(smach.State):
             
             # --- SPEED / PAUSE CONTROL ---
             if not found:
-                # Hysteresis: Only stop if lost for > 2.0s
-                if (rospy.Time.now() - last_seen_time).to_sec() > 2.0:
+                # Determine Context: Turning or Straight?
+                is_turning = abs(self.current_rot_vel) > 0.4 # Threshold rad/s
+                timeout = TIMEOUT_TURN if is_turning else TIMEOUT_STRAIGHT
+                
+                # Hysteresis: Only stop if lost for > timeout
+                if (rospy.Time.now() - last_seen_time).to_sec() > timeout:
                     # STOP condition
                     if not self.is_paused:
-                        rospy.logwarn_throttle(2.0, "[NAV] User Lost (Rear RGB). Stopping.")
+                        mode_str = "Turning" if is_turning else "Straight"
+                        rospy.logwarn_throttle(2.0, f"[NAV] User Lost ({mode_str}). Timeout {timeout}s. Stopping.")
                         self.nav.cancel_goal()
                         self.is_paused = True
                         self.audio.speak("Bạn đâu rồi?")
             else:
                 # FOUND
                 if dist > 2.5:
-                    # TOO FAR -> Stop/Wait
                     if not self.is_paused:
                         rospy.logwarn(f"[NAV] User lagging ({dist:.1f}m). Waiting.")
                         self.nav.cancel_goal()
                         self.is_paused = True
                         self.audio.speak("Nhanh lên nhé.")
                 elif dist < 1.0:
-                    # CLOSE -> Resume / Max Speed
                     if self.is_paused:
                         rospy.loginfo(f"[NAV] User caught up ({dist:.1f}m). Resuming.")
                         self.nav.send_goal(pose, done_cb=self._done_cb)
                         self.is_paused = False
-                    # Ideally set speed to Max here (if we had dynparam client)
                 else:
-                    # 1.0 < dist < 2.5 -> Linear Zone
-                    # Implied Resume if paused
                     if self.is_paused:
                         rospy.loginfo(f"[NAV] User in range ({dist:.1f}m). Resuming.")
                         self.nav.send_goal(pose, done_cb=self._done_cb)
@@ -182,10 +213,10 @@ class BaseNavigateState(smach.State):
             if self.preempt_requested():
                 self.service_preempt()
                 self.nav.cancel_goal()
+                sub.unregister()
                 return 'preempted'
                 
-
-            
+        sub.unregister()
         return self.nav_status
 
     def _done_cb(self, status, result):
@@ -240,16 +271,26 @@ class BaseNavigateState(smach.State):
         pass
 
 class NavigateState(BaseNavigateState):
-    """Single Destination Navigation"""
-    def __init__(self, nav, wp_manager, audio, knowledge, perception):
-        BaseNavigateState.__init__(self, nav, perception, audio, 
+    """
+    Subclass for specific navigation tasks (e.g. Go to Plant)
+    """
+    def __init__(self, nav, wp_manager, audio, knowledge, perception, display):
+        BaseNavigateState.__init__(self, nav, perception, audio, display, 
                                    outcomes=['arrived', 'aborted'], 
                                    input_keys=['target_plant'])
         self.wp_manager = wp_manager
+        self.knowledge = knowledge
         
     def execute(self, userdata):
-        plant = userdata.target_plant
-        wp_key = self.wp_manager.get_plant_waypoint_key(plant)
+        plant_name = userdata.target_plant
+        rospy.loginfo(f"[NAV] Going to plant: {plant_name}")
+        
+        # UI Update
+        self.display.update_status(f"Đang đi đến {plant_name}...")
+        self.display.update_options(["Dừng lại", "Hủy bỏ"])
+        
+        # 1. Get Coordinates
+        wp_key = self.wp_manager.get_plant_waypoint_key(plant_name)
         if not wp_key: return 'aborted'
         
         pose = self.wp_manager.get_waypoint_pose(wp_key)
@@ -267,7 +308,7 @@ class NavigateState(BaseNavigateState):
 class TourNavigate(BaseNavigateState):
     """Tour Navigation Step"""
     def __init__(self, nav, wp_manager, audio, perception, gesture, display):
-        BaseNavigateState.__init__(self, nav, perception, audio,
+        BaseNavigateState.__init__(self, nav, perception, audio, display,
                                    outcomes=['arrived', 'tour_interrupted', 'tour_complete'],
                                    input_keys=['tour_index', 'tour_keys'],
                                    output_keys=['tour_index', 'current_plant'])
@@ -446,25 +487,37 @@ class HandlingObstacle(smach.State):
     """
     Handle obstacle situation (human too close)
     """
-    def __init__(self, audio, perception, nav):
+    def __init__(self, audio, perception, nav, display):
         smach.State.__init__(self, outcomes=['clear', 'still_blocked', 'cancelled'])
         self.audio = audio
         self.perception = perception
         self.nav = nav
+        self.display = display
+        
+    def execute(self, userdata):
+        # UI Update
+        self.display.update_status("Gặp vật cản! Vui lòng tránh đường.")
+        self.display.update_options(["Tôi đã tránh", "Hủy bỏ"])
 
 class TurnFaceUser(smach.State):
     """
     State: Smart Arrival (Face User)
     Turns 180 (interruptible) -> Aligns with Front Camera
     """
-    def __init__(self, nav, audio, perception):
+    def __init__(self, nav, audio, perception, display):
         smach.State.__init__(self, outcomes=['succeeded', 'failed'])
         self.nav = nav
         self.audio = audio
         self.perception = perception
+        self.display = display
         
     def execute(self, userdata):
         rospy.loginfo("[FACE_USER] Smart Arrival: Turning to face user...")
+        
+        # UI Update
+        self.display.update_status("Đã đến nơi (Đang tìm bạn...)")
+        self.display.update_options(["Chi tiết", "Đi tiếp"])
+        
         self.audio.speak("Đến nơi rồi.")
         
         # 1. Smart Turn 180 (Check Front Camera)
@@ -680,7 +733,7 @@ def create_tour_sm(nav, audio, knowledge, wp_manager, perception, gesture, displ
         
         smach.StateMachine.add(
             'TURN_FACE_USER',
-            TurnFaceUser(nav, audio, perception),
+            TurnFaceUser(nav, audio, perception, display),
             transitions={
                 'succeeded': 'TOUR_INTRO',
                 'failed': 'TOUR_INTRO'
@@ -741,7 +794,7 @@ def create_greenhouse_sm():
                 'shutdown': 'shutdown'
             }
         )
-        
+            
         # Add TOUR nested state machine
         tour_sm = create_tour_sm(nav, audio, knowledge, wp_manager, perception, gesture, display)
         smach.StateMachine.add(
@@ -767,7 +820,7 @@ def create_greenhouse_sm():
         # Add EXECUTE - Simple navigation (no concurrency)
         smach.StateMachine.add(
             'EXECUTE',
-            NavigateState(nav, wp_manager, audio, knowledge, perception),  # Pass perception
+            NavigateState(nav, wp_manager, audio, knowledge, perception, display),  # Pass perception
             transitions={
                 'arrived': 'TURN_FACE_USER',
                 'aborted': 'IDLE'
@@ -777,7 +830,7 @@ def create_greenhouse_sm():
         # Add HANDLING_OBSTACLE state
         smach.StateMachine.add(
             'HANDLING_OBSTACLE',
-            HandlingObstacle(audio, perception, nav),
+            HandlingObstacle(audio, perception, nav, display),
             transitions={
                 'clear': 'EXECUTE',
                 'still_blocked': 'HANDLING_OBSTACLE',
@@ -788,10 +841,10 @@ def create_greenhouse_sm():
         # Add TURN_FACE_USER
         smach.StateMachine.add(
             'TURN_FACE_USER',
-            TurnFaceUser(nav, audio, perception),
+            TurnFaceUser(nav, audio, perception, display),
             transitions={
-                'succeeded': 'ARRIVAL',
-                'failed': 'ARRIVAL'
+                'succeeded': 'IDLE', # Or PREPARE_INTERACT
+                'failed': 'IDLE'
             }
         )
         

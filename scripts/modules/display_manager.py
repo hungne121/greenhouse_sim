@@ -15,6 +15,22 @@ class DisplayManager:
         
         # Real implementation would publish to a web view or specific tablet topic
         self.pub = rospy.Publisher('/pepper/tablet/command', String, queue_size=1)
+        self.status_pub = rospy.Publisher('/pepper/ui/status', String, queue_size=1)
+        self.options_pub = rospy.Publisher('/pepper/ui/options', String, queue_size=1)
+
+    def update_status(self, status):
+        """Update robot status on UI"""
+        rospy.loginfo(f"📺 [DisplayManager] Status: {status}")
+        self.status_pub.publish(status)
+        
+    def update_options(self, options):
+        """
+        Update available buttons on UI
+        Args: options (list of str): e.g. ["Tour", "Help"]
+        """
+        import json
+        json_str = json.dumps(options)
+        self.options_pub.publish(json_str)
 
     def _mock_cb(self, msg):
         pass

@@ -285,6 +285,92 @@ class NavigationManager:
         (roll, pitch, yaw) = euler_from_quaternion([q.x, q.y, q.z, q.w])
         return yaw
 
+    # ==========================
+    # SMART NAVIGATION (Leading)
+    # ==========================
+    
+    def go_to_plant_with_leading(self, pose, perception, interaction):
+        """
+        Executes 'Leading' behavior to a pose.
+        Args:
+            pose: Target pose dict
+            perception: PerceptionModule instance
+            interaction: InteractionManager instance
+        Returns:
+            str: 'arrived', 'aborted'
+        """
+        rospy.loginfo("[NavigationManager] Starting Leading Behavior...")
+        self.send_goal(pose, done_cb=self._internal_done_cb) # Use internal cb for status update
+        
+        self.is_paused = False
+        last_seen_time = rospy.Time.now()
+        rate = rospy.Rate(5)
+        
+        while self.current_status == self.ACTIVE and not rospy.is_shutdown():
+            # 1. Get Rear Perception using passed module
+            found, dist, angle = perception.get_rear_status()
+            
+            if found:
+                last_seen_time = rospy.Time.now()
+                
+            # 2. Logic: Pause/Resume based on distance
+            if not found:
+                # Lost Logic: Wait 5s (User Req) then Stop
+                if (rospy.Time.now() - last_seen_time).to_sec() > 5.0:
+                    if not self.is_paused:
+                        rospy.logwarn("[NAV] User lost (Rear). Pausing.")
+                        self.cancel_goal()
+                        self.is_paused = True
+                        interaction.speak("Bạn đâu rồi?")
+            else:
+                # Found Logic
+                if dist > 2.5: # Too far
+                    if not self.is_paused:
+                        rospy.logwarn(f"[NAV] User lagging ({dist:.1f}m). Pausing.")
+                        self.cancel_goal()
+                        self.is_paused = True
+                        interaction.speak("Nhanh lên nhé.")
+                elif dist < 1.0: # Close enough to resume
+                     if self.is_paused:
+                         rospy.loginfo("[NAV] User caught up. Resuming.")
+                         # Re-send goal
+                         self.send_goal(pose, done_cb=self._internal_done_cb)
+                         self.is_paused = False
+                elif self.is_paused: # Hysteresis
+                     rospy.loginfo("[NAV] User back in range. Resuming.")
+                     self.send_goal(pose, done_cb=self._internal_done_cb)
+                     self.is_paused = False
+            
+            rate.sleep()
+            
+        if self.current_status == GoalStatus.SUCCEEDED:
+            return 'arrived'
+            
+        return 'aborted'
+
+    def perform_arrival_turn(self, perception, interaction):
+        """
+        Executes 180-degree turn logic to face the user after arrival.
+        """
+        rospy.loginfo("[NavigationManager] Performing Arrival Turn...")
+        interaction.speak("Đã đến nơi.")
+        
+        # 1. Determine Turn Direction (Based on last rear user angle)
+        found, dist, angle = perception.get_rear_status()
+        turn_amount = 3.14159
+        if found:
+            turn_amount += angle # Compensation
+            
+        # 2. Execute Turn with Interrupt (Stop if Front Camera sees user)
+        def check_front():
+            found, _ = perception.get_front_status()
+            return found
+            
+        self.rotate_relative_with_interrupt(turn_amount, speed=1.0, check_fn=check_front)
+        
+        # 3. Final Alignment
+        interaction.align_with_user(timeout=3.0)
+
 # Test
 if __name__ == "__main__":
     rospy.init_node('nav_test')

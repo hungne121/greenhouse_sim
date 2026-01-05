@@ -26,7 +26,7 @@ class PerceptionManager:
         self.front_person_detected = False
         self.front_person_angle = 0.0
         self.front_person_last_seen = rospy.Time(0)
-        self.front_intent_start_time = None
+        self.front_detection_start_time = None
         self.front_intent_confirmed = False
         
         # Rear Tracking
@@ -34,6 +34,7 @@ class PerceptionManager:
         self.rear_person_angle = 0.0
         self.rear_detected = False
         self.rear_last_image = None # For fusion
+        self.rear_person_last_seen = rospy.Time(0)
         
         # --- MEDIAPIPE SETUP ---
         self.mp_pose = mp.solutions.pose
@@ -81,13 +82,6 @@ class PerceptionManager:
             self._rear_depth_callback,
             queue_size=1,
             buff_size=2**24
-        )
-        
-        # 4. Rear Sonar (Safety Blind Spot)
-        self.sub_sonar_back = rospy.Subscriber(
-            '/pepper_robot/sonar_back', 
-            Range, 
-            self._sonar_back_callback
         )
         
         rospy.loginfo("[Perception] Initialized: MediaPipe Pose + NumPy Depth Fusion")
@@ -304,10 +298,6 @@ class PerceptionManager:
     def get_rear_track(self):
         with self.lock:
             return self.rear_person_dist, self.rear_person_angle, self.rear_detected
-            
-    def get_sonar_back(self):
-        with self.lock:
-            return self.sonar_back_dist
             
     def get_front_blob_status(self):
         with self.lock:
