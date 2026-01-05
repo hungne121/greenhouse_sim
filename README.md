@@ -18,3 +18,15 @@ roslaunch greenhouse_sim greenhouse_hri_system
 ```bash
 rosrun teleop_twist_keyboard teleop_twist_keyboard.py cmd_vel:=/human/cmd_vel
 ```
+## Bring-up Robot and World
+```bash
+roslaunch greenhouse_sim greenhouse_bringup.launch
+```
+## Slam Gmaaping
+```bash
+roslaunch greenhouse_sim greenhosue_gmapping.launch
+```
+## Run navigation
+```bash
+roslaunch greenhouse_sim greenhosue_navigation.launch
+```
