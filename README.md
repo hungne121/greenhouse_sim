@@ -22,7 +22,7 @@ rosrun teleop_twist_keyboard teleop_twist_keyboard.py cmd_vel:=/human/cmd_vel
 ```bash
 roslaunch greenhouse_sim greenhouse_bringup.launch
 ```
-## Slam Gmaaping
+## Slam Gmapping
 ```bash
 roslaunch greenhouse_sim greenhosue_gmapping.launch
 ```
