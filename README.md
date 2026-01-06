@@ -30,3 +30,5 @@ roslaunch greenhouse_sim greenhosue_gmapping.launch
 ```bash
 roslaunch greenhouse_sim greenhosue_navigation.launch
 ```
+## Video Mo Phong
+Video/go_to_one_plant.mp4
