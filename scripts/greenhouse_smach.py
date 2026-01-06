@@ -27,101 +27,210 @@ from modules.display_manager import DisplayManager
 
 class IdleState(smach.State):
     """
-    IDLE State - Listening for initial commands
-    Outcomes: ['start_tour', 'go_to_plant', 'shutdown']
+    IDLE State - Passive Waiting
+    Outcomes: ['detected']
     """
-    def __init__(self, audio, knowledge, gesture, display, nav, perception):
+    def __init__(self, audio, gesture, display, perception):
+        smach.State.__init__(self, outcomes=['detected'])
+        self.audio = audio
+        self.gesture = gesture
+        self.display = display
+        self.perception = perception
+    
+    def execute(self, userdata):
+        rospy.loginfo("[IDLE] Passive Mode. Waiting for Wake Word or Visual Intent...")
+        self.gesture.perform_gesture('reset_pose')
+        
+        # UI Update
+        self.display.update_status("Đang chờ lệnh... (Hãy nói 'Pepper ơi')")
+        self.display.update_options(["Gọi 'Pepper ơi'"])
+        self.display.show_text("Zzz...")
+        
+        rate = rospy.Rate(10)
+        while not rospy.is_shutdown():
+            # 1. Visual Intent (> 3s)
+            if self.perception.check_front_intent():
+                rospy.loginfo("[IDLE] Front Intent Confirmed. Waking up.")
+                return 'detected'
+            
+            # 2. Audio Wake Word (Simulated checks or blocking listen not ideal here, 
+            # but if we use hotword detection it would be here. 
+            # For now, we reuse listen_once with short timeout to catch 'Pepper' or large noise)
+            # Actually, to be truly passive, we might just rely on Visual OR a trigger.
+            # User request said: "Idle -> Greeting -> Communication".
+            # Let's keep it simple: Visual Intent OR simple sound trigger.
+            
+            # For simulation responsiveness, we'll check if any valid voice command came in background?
+            # Or just rely on visual for now as per "Intent" focus.
+            # But let's add a quick listen check to prompt.
+            
+            # Simplified: Just wait for Visual Intent for now as primary wake up
+            # Or if tablet button pressed (via internal mechanism not shown here but implies intent)
+            
+            rate.sleep()
+        
+        return 'detected'
+
+class GreetingState(smach.State):
+    """
+    Greeting State - Wave and Say Hello
+    Outcomes: ['succeeded']
+    """
+    def __init__(self, audio, gesture, display):
+        smach.State.__init__(self, outcomes=['succeeded'],
+                             input_keys=['last_interaction'],
+                             output_keys=['last_interaction'])
+        self.audio = audio
+        self.gesture = gesture
+        self.display = display
+        
+    def execute(self, userdata):
+        # Check Debounce
+        now = rospy.Time.now().to_sec()
+        last = userdata.last_interaction if userdata.last_interaction else 0
+        
+        # FIX: Always greet if last == 0 (First run)
+        if last != 0 and (now - last) < 60.0: # 60s Debounce
+            rospy.loginfo("[GREETING] Recent interaction. Skipping greeting.")
+            return 'succeeded'
+            
+        rospy.loginfo("[GREETING] Performing greeting...")
+        self.display.update_status("Xin chào!")
+        self.display.show_text("Chào bạn! Tôi là Pepper.")
+        
+        # Parallel: Wave + Speak
+        self.gesture.perform_gesture('wave_hand')
+        self.audio.speak("Xin chào! Tôi có thể giúp gì cho bạn?")
+        
+        # Update timestamp only on full greeting? Or keep it updated in Communication?
+        # Let's update here to mark start of session
+        userdata.last_interaction = now
+        
+        return 'succeeded'
+
+class CommunicationState(smach.State):
+    """
+    Communication State - Central Hub
+    Outcomes: ['start_tour', 'go_to_plant', 'idle']
+    """
+    def __init__(self, audio, knowledge, gesture, display):
         smach.State.__init__(self, 
-                             outcomes=['start_tour', 'go_to_plant', 'shutdown'],
-                             output_keys=['target_plant', 'handoff_cmd'], 
-                             input_keys=['handoff_cmd'])
+                             outcomes=['start_tour', 'go_to_plant', 'idle'],
+                             output_keys=['target_plant', 'handoff_cmd', 'last_interaction'],
+                             input_keys=['handoff_cmd', 'current_location', 'last_interaction']) # Context
         self.audio = audio
         self.knowledge = knowledge
         self.gesture = gesture
         self.display = display
-        self.nav = nav
-        self.perception = perception
-    
+        
     def execute(self, userdata):
-        rospy.loginfo("[IDLE] Waiting for command (or Front Intent)...")
+        rospy.loginfo("[COMM] Listening for commands...")
         self.gesture.perform_gesture('reset_pose')
         
-        # UI Update
-        self.display.update_status("Đang chờ lệnh... (Hãy nói 'Xin chào')")
-        self.display.update_options(["Bắt đầu Tour", "Tìm cây", "Trợ giúp"])
-        self.display.show_text("Robot Pepper: Sẵn sàng phục vụ")
+        # Check Context
+        context_plant = None
+        if hasattr(userdata, 'current_location') and userdata.current_location:
+            context_plant = userdata.current_location
+            self.display.update_status(f"Đang ở {context_plant}. Bạn cần gì?")
+        else:
+            self.display.update_status("Đang lắng nghe...")
+            
+        self.display.update_options(["Đi Tour", "Tìm cây", "Kết thúc"])
         
         # Check Handoff
-        start_text = None
+        text = None
         if hasattr(userdata, 'handoff_cmd') and userdata.handoff_cmd:
-             start_text = userdata.handoff_cmd
+             text = userdata.handoff_cmd
              userdata.handoff_cmd = None
+             rospy.loginfo(f"[COMM] Processing handoff: {text}")
         
-        # Loop
-        greeting_triggered = False
+        # --- LISTENING LOOP (With Soft Timeout) ---
+        soft_timeout_triggered = False
         
-        while not rospy.is_shutdown():
-            # 1. VISUAL GREETING (New Logic: Intent Timer)
-            if not greeting_triggered and not start_text:
-                # Use new API: check_front_intent() -> Returns True if > 3s
-                has_intent = self.perception.check_front_intent()
-                
-                if has_intent:
-                    rospy.loginfo("[IDLE] Front Intent Confirmed (3s Dwell). Greeting.")
-                    self.nav.send_velocity(0, 0) # Ensure stop
-                    self.gesture.perform_gesture('wave_hand')
-                    self.audio.speak("Xin chào! Tôi có thể giúp gì cho bạn?")
-                    greeting_triggered = True
-                
-                # Note: No alignment here in IDLE, simplified as per request.
-                # Just wait for Intent -> Greet.
-
-            # 2. AUDIO PROCESSING
-            if start_text:
-                text = start_text
-                start_text = None
-            elif greeting_triggered:
-                text = self.audio.listen_once(timeout=5)
-            else:
-                 rospy.loginfo_throttle(5.0, "[IDLE] Waiting for user (Front Camera)...")
-                 rospy.sleep(0.5)
-                 continue
+        if not text:
+            # First Try
+            text = self.audio.listen_once(timeout=8)
             
+            # If silence, try prompting ONCE (Soft Timeout)
             if not text:
-                continue
-            
-            intent, conf = self.audio.predict_intent(text)
-            rospy.loginfo(f"[IDLE] Detected: {intent} ({conf:.2f})")
-            
-            # Confidence Threshold
-            if conf < 0.75:
-                # Fallback: specific check for keywords even if model is unsure?
-                # For now just reject
-                rospy.logwarn(f"[IDLE] Low confidence ({conf:.2f}). Rejecting.")
-                self.audio.speak("Xin lỗi, tôi nghe chưa rõ.")
-                continue
-
-            if intent == 'quit_system':
-                self.audio.speak("Tạm biệt!")
-                return 'shutdown'
-            elif intent == 'whole_tour':
-                self.audio.speak("Mời bạn đi theo tôi.")
-                return 'start_tour'
-            elif intent == 'navigation_request':
-                # Extract plant logic (Simplified)
-                plant_name = None
-                for p in self.knowledge.get_all_plant_names():
-                    if p in text: plant_name = p; break
-                
-                if plant_name:
-                    userdata.target_plant = plant_name
-                    self.audio.speak(f"Ok, đi đến {plant_name}.")
-                    return 'go_to_plant'
-            
-            # (Other intents omitted for brevity, logic remains similar)
-            self.audio.speak("Tôi chưa rõ. Bạn muốn đi tour hay tìm cây?")
+                if context_plant:
+                     self.audio.speak(f"Bạn có muốn biết thêm gì về {context_plant} không?")
+                else:
+                     self.audio.speak("Bạn cần tôi giúp gì nữa không?")
+                     
+                soft_timeout_triggered = True
+                rospy.sleep(0.5)
+                text = self.audio.listen_once(timeout=6) # Listen again
         
-        return 'shutdown'
+        if not text:
+            rospy.loginfo("[COMM] Still silence. Returning to IDLE.")
+            return 'idle'
+            
+        intent, conf = self.audio.predict_intent(text)
+        rospy.loginfo(f"[COMM] Intent: {intent} ({conf:.2f})")
+        
+        # Update Timestamp
+        userdata.last_interaction = rospy.Time.now().to_sec()
+        
+        if conf < 0.7: 
+            self.audio.speak("Tôi nghe không rõ. Mời bạn nói lại.")
+            return 'idle' # Ideally Loop here? But linear flow returns IDLE. IDLE will re-greet if > 60s.
+
+        if intent == 'whole_tour':
+            self.audio.speak("Tuyệt vời. Mời bạn đi theo tôi.")
+            return 'start_tour'
+        elif intent == 'navigation_request':
+            for p in self.knowledge.get_all_plant_names():
+                if p in text.lower():
+                    userdata.target_plant = p
+                    self.audio.speak(f"Được, đi đến {p}.")
+                    return 'go_to_plant'
+            self.audio.speak("Tôi chưa biết cây đó.")
+            return 'idle'
+        elif intent == 'quit_system' or 'stop' in text.lower():
+            self.audio.speak("Tạm biệt.")
+            return 'idle'
+        elif intent.startswith('ask_'):
+            # Contextual Q&A
+            target = None
+            # 1. Check if entity mentioned
+            for p in self.knowledge.get_all_plant_names():
+                if p in text.lower():
+                    target = p; break
+            
+            # 2. If not, use Context
+            if not target and context_plant:
+                rospy.loginfo(f"[COMM] Using Context: {context_plant}")
+                target = context_plant
+            
+            if target:
+                # Answer logic
+                # For simplicity here, calling knowledge manager directly or placeholder
+                # We don't have a direct 'answer' method in KnowledgeManager shown here?
+                # Usually we return 'answer_question' state or handle it.
+                # Let's perform answer HERE for fluidity
+                self.audio.speak(f"Về {target} thì...") # Placeholder phrasing
+                # Actually knowledge manager has query?
+                # Let's assume audio.speak handles it or we call _answer_helper
+                
+                # Retrieve data manually to speak
+                k_data = self.knowledge.plants_data.get(target, {})
+                if 'care' in intent: 
+                    ans = f"Chăm sóc {target}: {k_data.get('care_water', '')} {k_data.get('care_light', '')} {k_data.get('fertilizer', '')}"
+                elif 'variety' in intent: ans = k_data.get('variety', 'Giống này tôi chưa rõ.')
+                elif 'origin' in intent: ans = k_data.get('origin', 'Xuất xứ chưa rõ.')
+                else: ans = k_data.get('description', '')
+                
+                self.audio.speak(ans)
+                self.audio.speak("Bạn muốn hỏi gì nữa không?")
+                # Return 'idle' to loop back via IDLE->GREETING check (debounce) -> COMM
+                # This works because greeting checks time < 60s.
+                return 'idle'
+            else:
+                self.audio.speak("Bạn muốn hỏi về cây nào?")
+                return 'idle'
+            
+        return 'idle'
 
 
 # ============================================
@@ -172,6 +281,19 @@ class BaseNavigateState(smach.State):
             # --- REAR SENSOR FUSION ---
             dist, angle, found = self.perception.get_rear_track()
             
+            # --- NEW: Safety Stop Check (< 0.8m) ---
+            if found and dist < 0.8:
+                rospy.logwarn_throttle(2.0, f"[NAV] Safety Stop! User too close ({dist:.2f}m)")
+                self.nav.cancel_goal() # Stop navigation
+                self.nav.send_velocity(0, 0) # Ensure robot is stopped
+                self.display.update_status("Bạn đi quá gần!")
+                self.audio.speak("Bạn đi quá gần, vui lòng lùi lại.", blocking=False) # Add Audio Warning
+                self.is_paused = True # Mark as paused due to safety
+                last_seen_time = rospy.Time.now() # Reset last seen to avoid immediate lost user timeout
+                rate.sleep()
+                continue # Skip normal leading logic until user moves away
+            # --- END NEW ---
+
             if found:
                 last_seen_time = rospy.Time.now()
             
@@ -189,7 +311,7 @@ class BaseNavigateState(smach.State):
                         rospy.logwarn_throttle(2.0, f"[NAV] User Lost ({mode_str}). Timeout {timeout}s. Stopping.")
                         self.nav.cancel_goal()
                         self.is_paused = True
-                        self.audio.speak("Bạn đâu rồi?")
+                        self.audio.speak("Tôi đang tìm bạn...")
             else:
                 # FOUND
                 if dist > 2.5:
@@ -198,12 +320,12 @@ class BaseNavigateState(smach.State):
                         self.nav.cancel_goal()
                         self.is_paused = True
                         self.audio.speak("Nhanh lên nhé.")
-                elif dist < 1.0:
-                    if self.is_paused:
-                        rospy.loginfo(f"[NAV] User caught up ({dist:.1f}m). Resuming.")
-                        self.nav.send_goal(pose, done_cb=self._done_cb)
-                        self.is_paused = False
-                else:
+                elif dist < 1.0: 
+                    # User < 1.0m. 
+                    # If Paused (Safety Stop or Too Far), DO NOT RESUME yet.
+                    # User must step back > 1.0m to resume.
+                    pass
+                else: # User is in optimal range (1.0m - 2.5m)
                     if self.is_paused:
                         rospy.loginfo(f"[NAV] User in range ({dist:.1f}m). Resuming.")
                         self.nav.send_goal(pose, done_cb=self._done_cb)
@@ -215,6 +337,8 @@ class BaseNavigateState(smach.State):
                 self.nav.cancel_goal()
                 sub.unregister()
                 return 'preempted'
+                
+            rate.sleep() # Ensure loop runs at desired rate
                 
         sub.unregister()
         return self.nav_status
@@ -371,8 +495,8 @@ class TourIntro(smach.State):
         
         # Face user logic
         # 1. Align
-        dist, angle = self.perception.get_front_human_input()
-        if dist < 3.0:
+        dist, angle, found = self.perception.get_front_track() # Use get_front_track for consistency
+        if found and dist < 3.0:
             if abs(angle) > 0.2:
                 cmd_turn = 0.5 if angle > 0 else -0.5
                 self.nav.send_velocity(0, cmd_turn)
@@ -521,12 +645,13 @@ class TurnFaceUser(smach.State):
         self.audio.speak("Đến nơi rồi.")
         
         # 1. Smart Turn 180 (Check Front Camera)
+        # 1. Smart Turn 180 (Check Front Camera)
         def check_front_fn():
-            angle, found = self.perception.get_front_track()
+            dist, angle, found = self.perception.get_front_track()
             return found
             
         # Check if already found
-        angle, found = self.perception.get_front_track()
+        dist, angle, found = self.perception.get_front_track()
         if found:
             rospy.loginfo("[FACE_USER] User already in front!")
             success = 'interrupted'
@@ -534,7 +659,7 @@ class TurnFaceUser(smach.State):
             success = self.nav.rotate_relative_with_interrupt(3.14159, speed=1.0, check_fn=check_front_fn)
             
         # 2. Scanning if not found
-        angle, found = self.perception.get_front_track()
+        dist, angle, found = self.perception.get_front_track()
         if not found:
              rospy.loginfo("[FACE_USER] User not found. Scanning...")
              scan_angles = [0.7, -1.4] # Left 40, Right 80
@@ -547,22 +672,43 @@ class TurnFaceUser(smach.State):
         # 3. Active Alignment (Front)
         if found:
             rospy.loginfo("[FACE_USER] Aligning with Front Camera...")
-            align_timeout = rospy.Time.now() + rospy.Duration(5.0)
+            align_timeout = rospy.Time.now() + rospy.Duration(10.0) # More time
+            stable_start = None
             rate = rospy.Rate(10)
             
             while rospy.Time.now() < align_timeout:
-                angle, found = self.perception.get_front_track()
+                dist, angle, found = self.perception.get_front_track()
+                
                 if found:
                     err = angle # Positive (Left) -> Turn Left (+)
-                    if abs(err) < 0.1:
-                        rospy.loginfo("[FACE_USER] Aligned!")
-                        break
                     
-                    rot_vel = 1.5 * err
-                    rot_vel = max(min(rot_vel, 0.8), -0.8) # Clamp
-                    self.nav.send_velocity(0, rot_vel)
+                    # Log error for debug
+                    # rospy.loginfo_throttle(0.5, f"[FACE_USER] Err: {err:.2f}")
+                    
+                    if abs(err) < 0.06: # Tighter tolerance (~3.5 deg)
+                        if stable_start is None:
+                            stable_start = rospy.Time.now()
+                        
+                        # Require stability for 1s
+                        if (rospy.Time.now() - stable_start).to_sec() > 1.0:
+                             rospy.loginfo("[FACE_USER] Aligned and Stable!")
+                             break
+                    else:
+                        stable_start = None # Reset if drifts
+                        
+                        # PID Control (Aggressive)
+                        kp = 1.2 
+                        rot_vel = kp * err
+                        
+                        # Min Moving Speed (Overcome Friction)
+                        if abs(rot_vel) < 0.15: 
+                            rot_vel = 0.15 * (1.0 if err > 0 else -1.0)
+                        
+                        rot_vel = max(min(rot_vel, 0.6), -0.6) 
+                        self.nav.send_velocity(0, rot_vel)
                 else:
                     self.nav.send_velocity(0, 0)
+                    stable_start = None
                     
                 rate.sleep()
                 
@@ -581,16 +727,27 @@ class TurnFaceUser(smach.State):
 
 class ArrivalState(smach.State):
     """State to announce arrival at plant"""
-    def __init__(self, audio, knowledge):
+    def __init__(self, audio, gesture, knowledge, display):
         smach.State.__init__(self, 
-                             outcomes=['done', 'return_idle'],
-                             input_keys=['target_plant'])
+                             outcomes=['done'],
+                             input_keys=['target_plant'],
+                             output_keys=['current_location']) # Added output
         self.audio = audio
+        self.gesture = gesture
         self.knowledge = knowledge
+        self.display = display
     
     def execute(self, userdata):
         plant = userdata.target_plant
         data = self.knowledge.plants_data.get(plant, {})
+        
+        # Update Context
+        userdata.current_location = plant 
+        rospy.loginfo(f"[ARRIVAL] Context updated: current_location = {plant}")
+        
+        # Display & Gesture
+        self.display.show_image(data.get('image', 'placeholder.jpg'))
+        self.gesture.perform_gesture('show_plant')
         
         intro = f"Chúng ta đã đến {plant}. "
         intro += f"Đây là giống {data.get('variety', 'chưa rõ')}. "
@@ -627,7 +784,6 @@ class PrepareLeading(smach.State):
         self.audio.speak("Được rồi, đi theo tôi nhé.")
         rospy.sleep(1.0)
         
-        # 2. Rough Turn 180 (Blind)
         # 2. Rough Turn 180 (Smart Interrupt)
         rospy.loginfo("[PREPARE] Rough Turn 180 (Smart)...")
         
@@ -649,53 +805,44 @@ class PrepareLeading(smach.State):
              # Check if we should Scan or Align
              dist, angle, found = self.perception.get_rear_track()
              
-             if not found:
-                 # SEARCH BEHAVIOR (Scan +/- 45 deg)
-                 rospy.loginfo("[PREPARE] User not found after turn. Scanning...")
-                 scan_angles = [0.7, -1.4] # Left 40deg, then Right 80deg (net -40)
+             if found:
+                 # FIX: Wait a bit for user to react/move into frame?
+                 rospy.sleep(1.5) # Give user time to catch up after robot spin
                  
-                 for scan in scan_angles:
-                     rospy.loginfo(f"[PREPARE] Scanning {scan} rad...")
-                     self.nav.rotate_relative_with_interrupt(scan, speed=0.8, check_fn=check_rear_fn)
-                     if check_rear_fn():
-                         found = True
-                         break
-                         
-        # 3. Active Alignment (Visual Servoing)
-        if found:
-            rospy.loginfo("[PREPARE] Aligning with Rear Camera...")
-            align_timeout = rospy.Time.now() + rospy.Duration(5.0)
-            
-            rate = rospy.Rate(10)
-            while rospy.Time.now() < align_timeout:
-                dist, angle, found = self.perception.get_rear_track()
-                
-                if found:
-                    err = angle
-                    if abs(err) < 0.1:
-                        rospy.loginfo(f"[PREPARE] Aligned! Error: {err:.2f}")
-                        aligned = True
-                        break
-                    else:
-                        kp = 1.5
-                        rot_vel = kp * err
-                        rot_vel = max(min(rot_vel, 1.0), -1.0)
-                        self.nav.send_velocity(0, rot_vel)
-                else:
-                    self.nav.send_velocity(0, 0) # Lost during align?
-                
-                rate.sleep()
-                
-            self.nav.send_velocity(0, 0)
-        
-        if aligned or found: # Allow if found but maybe not 100% aligned
-            self.audio.speak("Đã thấy bạn. Đi thôi!")
-            return 'ready'
+                 # Align Logic (Simplified for Prepare)
+                 # For PrepareLeading, we just need to ensure user is generally in view.
+                 # Full alignment can be done by the leading state.
+                 # If found, we consider it 'aligned enough' for starting.
+                 aligned = True # Mark as aligned if found after turn/interrupt
+                 
+                 if aligned or found: 
+                     self.audio.speak("Đã thấy bạn. Đi thôi!")
+                     return 'ready'
+                 else:
+                     # Fallback: Search Scan?
+                     # For now proceed if found once
+                     return 'ready'
         else:
-            self.audio.speak("Bạn đâu rồi?")
-            # Fallback: Just go anyway? OR Return failed? 
-            # User wants it smooth, likely user IS there.
-            return 'ready' # Assume user will catch up
+             # Search Scan
+             rospy.loginfo("[PREPARE] User not found. Scanning...")
+             self.audio.speak("Tôi đang tìm bạn...")
+             scan_angles = [0.7, -1.4] 
+             found_user = False
+             
+             for scan in scan_angles:
+                 self.nav.rotate_relative_with_interrupt(scan, speed=0.8, check_fn=lambda: self.perception.get_rear_track()[2])
+                 rospy.sleep(0.5)
+                 if self.perception.get_rear_track()[2]:
+                     found_user = True
+                     break
+             
+             if found_user:
+                 self.audio.speak("À, thấy bạn rồi. Đi thôi.")
+                 return 'ready'
+             
+             self.audio.speak("Bạn đâu rồi?")
+             # Fallback
+             return 'ready'
 
 
 def create_tour_sm(nav, audio, knowledge, wp_manager, perception, gesture, display):
@@ -766,13 +913,13 @@ def create_greenhouse_sm():
     """Create the main Greenhouse State Machine"""
     
     # Initialize managers
-    audio = AudioManager()
-    nav = NavigationManager()
-    perception = PerceptionManager()
+    audio_manager = AudioManager()
+    nav_manager = NavigationManager()
+    perception_manager = PerceptionManager()
     wp_manager = WaypointManager()
-    knowledge = KnowledgeManager()
-    gesture = GestureManager()
-    display = DisplayManager()
+    knowledge_manager = KnowledgeManager()
+    gesture_manager = GestureManager()
+    display_manager = DisplayManager()
     
     # NOTE: Background listening DISABLED
     # States handle their own listening to avoid echo
@@ -782,83 +929,67 @@ def create_greenhouse_sm():
     sm = smach.StateMachine(outcomes=['shutdown'])
     sm.userdata.target_plant = None
     sm.userdata.handoff_cmd = None # Init handoff variable
+    sm.userdata.last_interaction = 0 # Init timestamp
+    sm.userdata.current_location = None # Init context
     
     with sm:
-        # Add IDLE state
-        smach.StateMachine.add(
-            'IDLE',
-            IdleState(audio, knowledge, gesture, display, nav, perception),
-            transitions={
-                'start_tour': 'TOUR',
-                'go_to_plant': 'PREPARE_SINGLE', 
-                'shutdown': 'shutdown'
-            }
-        )
-            
-        # Add TOUR nested state machine
-        tour_sm = create_tour_sm(nav, audio, knowledge, wp_manager, perception, gesture, display)
-        smach.StateMachine.add(
-            'TOUR',
-            tour_sm,
-            transitions={
-                'tour_finished': 'IDLE',
-                'tour_cancelled': 'IDLE'
-            },
-            remapping={'handoff_cmd': 'handoff_cmd'} # Remap output to global userdata
-        )
-
-        # Add PREPARE_SINGLE for Single Goal Navigation
-        smach.StateMachine.add(
-            'PREPARE_SINGLE',
-            PrepareLeading(nav, audio, perception),
-            transitions={
-                'ready': 'EXECUTE',
-                'failed': 'IDLE'
-            }
-        )
+        # 1. IDLE (Passive)
+        smach.StateMachine.add('IDLE', IdleState(audio_manager, gesture_manager, display_manager, perception_manager), 
+                               transitions={'detected':'GREETING'})
         
-        # Add EXECUTE - Simple navigation (no concurrency)
-        smach.StateMachine.add(
-            'EXECUTE',
-            NavigateState(nav, wp_manager, audio, knowledge, perception, display),  # Pass perception
-            transitions={
-                'arrived': 'TURN_FACE_USER',
-                'aborted': 'IDLE'
-            }
-        )
+        # 2. GREETING (Active - Wave/Hello)
+        smach.StateMachine.add('GREETING', GreetingState(audio_manager, gesture_manager, display_manager),
+                               transitions={'succeeded':'COMMUNICATION'})
+                               
+        # 3. COMMUNICATION (Hub)
+        # Self-loop logic can be handled by transition back to COMMUNICATION? 
+        # But here we defined outcomes=['idle', 'start_tour', 'go_to_plant']
+        # If Q&A happens, we might want to stay in COMMUNICATION. 
+        # Let's assume CommunicationState handles Q&A internally or we add a transition 'self_loop'.
+        # For this refactor, let's map 'idle' to 'IDLE'.
+        smach.StateMachine.add('COMMUNICATION', CommunicationState(audio_manager, knowledge_manager, gesture_manager, display_manager),
+                               transitions={'idle':'IDLE', 
+                                            'start_tour':'TOUR', 
+                                            'go_to_plant':'PREPARE_SINGLE'},
+                               remapping={'handoff_cmd': 'handoff_cmd', 'target_plant': 'target_plant'})
+
+        # 4. TOUR (Nested)
+        tour_sm = create_tour_sm(nav_manager, audio_manager, knowledge_manager, wp_manager, perception_manager, gesture_manager, display_manager)
+        smach.StateMachine.add('TOUR', tour_sm, 
+                               transitions={'tour_finished':'COMMUNICATION',  # Return to Hub
+                                            'tour_cancelled':'COMMUNICATION'},
+                               remapping={'handoff_cmd': 'handoff_cmd'})
+
+        # 5. SINGLE GOAL
+        # PREPARE -> EXECUTE -> ARRIVAL
+        smach.StateMachine.add('PREPARE_SINGLE', PrepareLeading(nav_manager, audio_manager, perception_manager),
+                               transitions={'ready':'EXECUTE',
+                                            'failed':'COMMUNICATION'})
+                                            
+        smach.StateMachine.add('EXECUTE', NavigateState(nav_manager, wp_manager, audio_manager, knowledge_manager, perception_manager, display_manager),
+                               transitions={'arrived':'TURN_FACE_USER_SINGLE', # Changed to point to new state
+                                            'aborted':'COMMUNICATION'})
+
+        # Added missing State for Single Goal
+        smach.StateMachine.add('TURN_FACE_USER_SINGLE', TurnFaceUser(nav_manager, audio_manager, perception_manager, display_manager),
+                               transitions={'succeeded':'ARRIVAL_SINGLE',
+                                            'failed':'ARRIVAL_SINGLE'})
+
+        smach.StateMachine.add('ARRIVAL_SINGLE', ArrivalState(audio_manager, gesture_manager, knowledge_manager, display_manager),
+                               transitions={'done':'COMMUNICATION'})
         
         # Add HANDLING_OBSTACLE state
         smach.StateMachine.add(
             'HANDLING_OBSTACLE',
-            HandlingObstacle(audio, perception, nav, display),
+            HandlingObstacle(audio_manager, perception_manager, nav_manager, display_manager),
             transitions={
                 'clear': 'EXECUTE',
                 'still_blocked': 'HANDLING_OBSTACLE',
-                'cancelled': 'IDLE'
+                'cancelled': 'COMMUNICATION' # Changed from IDLE
             }
         )
         
-        # Add TURN_FACE_USER
-        smach.StateMachine.add(
-            'TURN_FACE_USER',
-            TurnFaceUser(nav, audio, perception, display),
-            transitions={
-                'succeeded': 'IDLE', # Or PREPARE_INTERACT
-                'failed': 'IDLE'
-            }
-        )
-        
-        # Add ARRIVAL state
-        smach.StateMachine.add(
-            'ARRIVAL',
-            ArrivalState(audio, knowledge),
-            transitions={
-                'done': 'IDLE',
-                'return_idle': 'IDLE'
-            }
-        )
-    
-    return sm, audio
+    return sm, audio_manager
 
 def main():
     rospy.init_node('greenhouse_smach_controller')

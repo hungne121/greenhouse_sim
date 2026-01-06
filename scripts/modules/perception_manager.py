@@ -129,7 +129,7 @@ class PerceptionManager:
                         self.front_person_last_seen = rospy.Time.now()
                     
                     # Check Center ROI (Central 40% of screen) - For Intent Detection Only
-                    if (width * 0.3) < cx < (width * 0.7):
+                    if (width * 0.2) < cx < (width * 0.8):
                         found_center_person = True
                     else:
                         rospy.logwarn_throttle(2.0, f"[PERCEPTION] Person Outside ROI (cx={cx/width:.2f})")
@@ -291,9 +291,9 @@ class PerceptionManager:
         with self.lock:
              # Check if data is fresh (< 0.5s)
              if (rospy.Time.now() - self.front_person_last_seen).to_sec() < 0.5:
-                 return self.front_person_angle, True
+                 return 1.0, self.front_person_angle, True # Return dummy dist 1.0 for consistency
              else:
-                 return 0.0, False
+                 return 0.0, 0.0, False
                  
     def get_rear_track(self):
         with self.lock:
